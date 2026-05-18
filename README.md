@@ -12,14 +12,3 @@ python train.py
 
 
 ---
-
-## Workflow complet
-
-### 1. En local (VS Code)
-
-Créer le repo :
-
-```bash
-git init
-git add .
-git commit -m "initial commit"
