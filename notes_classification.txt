@@ -1,0 +1,20 @@
+forward + forward + même vitesse        => forward
+forward + forward + vitesse différente => light_left / light_right
+forward + stop                         => pivot_right
+stop + forward                         => pivot_left
+forward + backward                     => sharp_right
+backward + forward                     => sharp_left
+stop + stop                            => stop
+backward + backward                    => backward
+
+
+analysis_result/#Record_xxx/
+├── direction_distribution.csv
+├── direction_distribution.png
+├── class_examples.csv
+└── examples/
+    ├── forward_1.jpg
+    ├── forward_2.jpg
+    ├── forward_3.jpg
+    ├── light_left_1.jpg
+    └── ...
