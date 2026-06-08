@@ -1,9 +1,4 @@
 dataset;nb_samples;majority_class;majority_percent;minority_class;minority_percent;imbalance_ratio
-#Record_2025-07-02_09-46-48;4373;stop;62.86;sharp_right;0.05;1257.2
-#Record_2025-07-02_12-10-19;820;stop;64.27;backward;3.66;17.56
-#Record_2025-07-02_14-28-50;1902;stop;63.3;sharp_right;0.11;575.45
-#Record_2025-07-03_11-21-26;1343;stop;54.65;light_left;3.43;15.93
-#Record_2025-07-03_11-32-43;1195;stop;57.49;light_right;3.18;18.08
-#Record_2025-07-03_11-44-47;788;stop;64.59;backward;1.78;36.29
-#Record_2025-07-03_18-08-57;988;stop;65.69;light_right;1.62;40.55
-#Record_2025-07-03_18-36-57;2135;stop;64.26;sharp_left;0.37;173.68
+Record_2025-08-08_19-36-02;2741;stop;54.54;light_right;0.99;55.09
+Record_2025-08-11_18-31-58;46;stop;63.04;light_right;4.35;14.49
+Record_2025-08-11_18-34-54;72;stop;59.72;light_right;2.78;21.48

@@ -1,10 +1,19 @@
-import os
-import shutil
-import pandas as pd
-import matplotlib.pyplot as plt
+# Rééchantillonnage tous les 250 ms
+# interpolation linéaire de speedA / speedB
+# maintien de l’état précédent pour les GPIO
+# sauvegarde dans segmentation/nom_du_record/labels/labels.csv
+# un seul fichier d’analyse global : segmentation/resampling_analysis.csv
 
-DATASET_DIR = "Records"
-OUTPUT_DIR = "analysis_result"
+import os
+import pandas as pd
+
+# =========================
+# CONFIGURATION
+# =========================
+
+DATASET_DIR = "Record_V2"
+OUTPUT_DIR = "segmentation"
+SAMPLE_PERIOD_MS = 250
 
 CLASSES = [
     "forward",
@@ -19,6 +28,48 @@ CLASSES = [
     "other"
 ]
 
+
+# =========================
+# RÉÉCHANTILLONNAGE
+# =========================
+
+def resample_commands(df, sample_period_ms=250):
+    df = df.sort_values("time_in_ms").reset_index(drop=True)
+
+    start_time = int(df["time_in_ms"].iloc[0])
+    end_time = int(df["time_in_ms"].iloc[-1])
+
+    new_times = list(range(start_time, end_time + 1, sample_period_ms))
+
+    original = df.set_index("time_in_ms")
+
+    resampled = original.reindex(
+        original.index.union(new_times)
+    ).sort_index()
+
+    # Vitesses : interpolation linéaire
+    resampled["speedA"] = resampled["speedA"].interpolate(method="index")
+    resampled["speedB"] = resampled["speedB"].interpolate(method="index")
+
+    # GPIO : état logique maintenu
+    gpio_cols = ["GPIO1", "GPIO2", "GPIO3", "GPIO4"]
+    resampled[gpio_cols] = resampled[gpio_cols].ffill()
+
+    # On garde uniquement les timestamps échantillonnés
+    resampled = resampled.loc[new_times].reset_index()
+    resampled = resampled.rename(columns={"index": "time_in_ms"})
+
+    # Nettoyage des types
+    resampled["speedA"] = resampled["speedA"].round().clip(0, 100).astype(int)
+    resampled["speedB"] = resampled["speedB"].round().clip(0, 100).astype(int)
+    resampled[gpio_cols] = resampled[gpio_cols].astype(int)
+
+    return resampled
+
+
+# =========================
+# CLASSIFICATION
+# =========================
 
 def motor_direction(gpio_a, gpio_b, side):
     if side == "left":
@@ -76,176 +127,110 @@ def classify_direction(row):
     return "other"
 
 
-def add_examples(df, dataset_path, output_dataset_dir):
-    image_dir = os.path.join(dataset_path, "Images")
+# =========================
+# ANALYSE
+# =========================
 
-    if not os.path.exists(image_dir):
-        print(f"Pas de dossier Images dans {dataset_path}")
-        return
+def analyze_resampled_csv(record_name, df_original, df_resampled):
+    df_resampled = df_resampled.copy()
+    df_resampled["direction_class"] = df_resampled.apply(classify_direction, axis=1)
 
-    image_files = sorted([
-        f for f in os.listdir(image_dir)
-        if f.lower().endswith((".jpg", ".jpeg", ".png"))
-    ])
+    result = {
+        "record": record_name,
+        "sample_period_ms": SAMPLE_PERIOD_MS,
 
-    n = min(len(df), len(image_files))
+        "original_rows": len(df_original),
+        "resampled_rows": len(df_resampled),
+        "rows_created": max(0, len(df_resampled) - len(df_original)),
+        "rows_removed": max(0, len(df_original) - len(df_resampled)),
 
-    df_examples = df.iloc[:n].copy()
-    df_examples["image_path"] = [
-        os.path.join(image_dir, img)
-        for img in image_files[:n]
-    ]
+        "start_time_ms": int(df_original["time_in_ms"].min()),
+        "end_time_ms": int(df_original["time_in_ms"].max()),
+        "duration_s": round(
+            (df_original["time_in_ms"].max() - df_original["time_in_ms"].min()) / 1000,
+            2
+        ),
 
-    examples_dir = os.path.join(output_dataset_dir, "examples")
-    os.makedirs(examples_dir, exist_ok=True)
+        "speedA_min": int(df_resampled["speedA"].min()),
+        "speedA_max": int(df_resampled["speedA"].max()),
+        "speedA_mean": round(df_resampled["speedA"].mean(), 2),
 
-    examples = []
+        "speedB_min": int(df_resampled["speedB"].min()),
+        "speedB_max": int(df_resampled["speedB"].max()),
+        "speedB_mean": round(df_resampled["speedB"].mean(), 2),
+    }
+
+    counts = df_resampled["direction_class"].value_counts()
+    percents = df_resampled["direction_class"].value_counts(normalize=True) * 100
 
     for cls in CLASSES:
-        subset = df_examples[df_examples["direction_class"] == cls]
+        result[f"{cls}_count"] = int(counts.get(cls, 0))
+        result[f"{cls}_percent"] = round(percents.get(cls, 0), 2)
 
-        if len(subset) == 0:
-            continue
+    return result
 
-        samples = subset.sample(
-            n=min(3, len(subset)),
-            random_state=42
-        )
 
-        for i, (_, row) in enumerate(samples.iterrows(), start=1):
-            src = row["image_path"]
-            ext = os.path.splitext(src)[1]
-
-            dst_name = f"{cls}_{i}{ext}"
-            dst = os.path.join(examples_dir, dst_name)
-
-            shutil.copy(src, dst)
-
-            examples.append({
-                "class": cls,
-                "source_image": src,
-                "copied_image": dst
-            })
-
-    examples_df = pd.DataFrame(examples)
-    examples_df.to_csv(
-        os.path.join(output_dataset_dir, "class_examples.csv"),
-        sep=";",
-        index=False
-    )
-
+# =========================
+# MAIN
+# =========================
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-global_results = []
-all_data = []
+analysis_rows = []
 
-for dataset_name in sorted(os.listdir(DATASET_DIR)):
-    dataset_path = os.path.join(DATASET_DIR, dataset_name)
+print("\n==============================")
+print("RÉÉCHANTILLONNAGE DES CSV")
+print("==============================")
+print(f"Dossier source        : {DATASET_DIR}")
+print(f"Dossier sortie        : {OUTPUT_DIR}")
+print(f"Période échantillonnage : {SAMPLE_PERIOD_MS} ms")
 
-    if not os.path.isdir(dataset_path):
+for record_name in sorted(os.listdir(DATASET_DIR)):
+    record_path = os.path.join(DATASET_DIR, record_name)
+
+    if not os.path.isdir(record_path):
         continue
 
-    csv_path = os.path.join(dataset_path, "labels.csv")
+    csv_path = os.path.join(record_path, "labels.csv")
 
     if not os.path.exists(csv_path):
-        print(f"Pas de labels.csv dans {dataset_name}")
+        print(f"\n[IGNORÉ] {record_name} : labels.csv introuvable")
         continue
 
-    print(f"Analyse de {dataset_name}")
+    print("\n------------------------------")
+    print(f"Record : {record_name}")
 
-    output_dataset_dir = os.path.join(OUTPUT_DIR, dataset_name)
-    os.makedirs(output_dataset_dir, exist_ok=True)
+    df_original = pd.read_csv(csv_path, sep=";")
+    df_original = df_original.sort_values("time_in_ms").reset_index(drop=True)
 
-    df = pd.read_csv(csv_path, sep=";")
-    df["direction_class"] = df.apply(classify_direction, axis=1)
+    df_resampled = resample_commands(df_original, SAMPLE_PERIOD_MS)
 
-    add_examples(df, dataset_path, output_dataset_dir)
+    output_dir = os.path.join(OUTPUT_DIR, record_name, "labels")
+    os.makedirs(output_dir, exist_ok=True)
 
-    all_data.append(df)
+    output_csv = os.path.join(output_dir, "labels.csv")
 
-    counts = df["direction_class"].value_counts()
-    percents = df["direction_class"].value_counts(normalize=True) * 100
+    df_resampled.to_csv(output_csv, sep=";", index=False)
 
-    summary_df = pd.DataFrame([
-        {
-            "class": cls,
-            "count": int(counts.get(cls, 0)),
-            "percent": round(percents.get(cls, 0), 2)
-        }
-        for cls in CLASSES
-    ])
+    rows_created = max(0, len(df_resampled) - len(df_original))
+    rows_removed = max(0, len(df_original) - len(df_resampled))
 
-    summary_df.to_csv(
-        os.path.join(output_dataset_dir, "direction_distribution.csv"),
-        sep=";",
-        index=False
+    print(f"Lignes originales       : {len(df_original)}")
+    print(f"Lignes rééchantillonnées: {len(df_resampled)}")
+    print(f"Lignes créées           : {rows_created}")
+    print(f"Lignes supprimées       : {rows_removed}")
+    print(f"CSV généré              : {output_csv}")
+
+    analysis_rows.append(
+        analyze_resampled_csv(record_name, df_original, df_resampled)
     )
 
-    plt.figure(figsize=(10, 5))
-    plt.bar(summary_df["class"], summary_df["percent"])
-    plt.title(f"Répartition des directions\n{dataset_name}")
-    plt.xlabel("Classe de direction")
-    plt.ylabel("Pourcentage (%)")
-    plt.ylim(0, 100)
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dataset_dir, "direction_distribution.png"), dpi=300)
-    plt.close()
+analysis_df = pd.DataFrame(analysis_rows)
 
-    non_zero = summary_df[summary_df["count"] > 0]
+analysis_csv = os.path.join(OUTPUT_DIR, "resampling_analysis.csv")
+analysis_df.to_csv(analysis_csv, sep=";", index=False)
 
-    global_results.append({
-        "dataset": dataset_name,
-        "nb_samples": len(df),
-        "majority_class": non_zero.loc[non_zero["percent"].idxmax(), "class"],
-        "majority_percent": non_zero["percent"].max(),
-        "minority_class": non_zero.loc[non_zero["percent"].idxmin(), "class"],
-        "minority_percent": non_zero["percent"].min(),
-        "imbalance_ratio": round(
-            non_zero["percent"].max() / non_zero["percent"].min(),
-            2
-        )
-    })
-
-
-global_summary_df = pd.DataFrame(global_results)
-global_summary_df.to_csv(
-    os.path.join(OUTPUT_DIR, "global_direction_summary.csv"),
-    sep=";",
-    index=False
-)
-
-df_all = pd.concat(all_data, ignore_index=True)
-
-global_counts = df_all["direction_class"].value_counts()
-global_percents = df_all["direction_class"].value_counts(normalize=True) * 100
-
-global_distribution = pd.DataFrame([
-    {
-        "class": cls,
-        "count": int(global_counts.get(cls, 0)),
-        "percent": round(global_percents.get(cls, 0), 2)
-    }
-    for cls in CLASSES
-])
-
-global_distribution.to_csv(
-    os.path.join(OUTPUT_DIR, "global_direction_distribution.csv"),
-    sep=";",
-    index=False
-)
-
-plt.figure(figsize=(10, 5))
-plt.bar(global_distribution["class"], global_distribution["percent"])
-plt.title("Répartition globale des directions")
-plt.xlabel("Classe de direction")
-plt.ylabel("Pourcentage (%)")
-plt.ylim(0, 100)
-plt.xticks(rotation=45, ha="right")
-plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_DIR, "global_direction_distribution.png"), dpi=300)
-plt.close()
-
-print("\nAnalyse terminée.")
-print(f"Résultats enregistrés dans : {OUTPUT_DIR}")
+print("\n==============================")
+print("TERMINÉ")
+print("==============================")
+print(f"Fichier d'analyse : {analysis_csv}")

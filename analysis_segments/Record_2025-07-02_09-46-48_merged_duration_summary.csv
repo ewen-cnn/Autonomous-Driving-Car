@@ -1,8 +1,0 @@
-direction_class;count;mean_duration_ms;median_duration_ms;min_duration_ms;max_duration_ms
-backward;84;232.79;204.5;108;682
-forward;723;355.8;299.0;98;1397
-light_left;324;848.0;674.0;102;3868
-light_right;463;604.5;482.0;99;2306
-sharp_left;27;458.74;398.0;112;1215
-sharp_right;2;315.5;315.5;117;514
-stop;2748;398.71;254.0;95;42511
