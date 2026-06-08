@@ -8,3 +8,7 @@ Record_V2.zip
 
 
 segmentation/
+.venv/
+.vscode/
+.analysis_result/
+.segmentation/
