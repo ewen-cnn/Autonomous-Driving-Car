@@ -1,0 +1,4 @@
+dataset;nb_samples;majority_class;majority_percent;minority_class;minority_percent;imbalance_ratio
+Record_2025-08-08_19-36-02;2741;stop;54.54;light_right;0.99;55.09
+Record_2025-08-11_18-31-58;46;stop;63.04;light_right;4.35;14.49
+Record_2025-08-11_18-34-54;72;stop;59.72;light_right;2.78;21.48

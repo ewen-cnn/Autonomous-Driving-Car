@@ -1,0 +1,16 @@
+class;source_image;copied_image
+forward;Record_V2/Record_2025-08-08_19-36-02/Images/1754674906978.png;analysis_result/Record_2025-08-08_19-36-02/examples/forward_1.png
+forward;Record_V2/Record_2025-08-08_19-36-02/Images/1754674943339.png;analysis_result/Record_2025-08-08_19-36-02/examples/forward_2.png
+forward;Record_V2/Record_2025-08-08_19-36-02/Images/1754674855950.png;analysis_result/Record_2025-08-08_19-36-02/examples/forward_3.png
+light_left;Record_V2/Record_2025-08-08_19-36-02/Images/1754674886197.png;analysis_result/Record_2025-08-08_19-36-02/examples/light_left_1.png
+light_left;Record_V2/Record_2025-08-08_19-36-02/Images/1754674917153.png;analysis_result/Record_2025-08-08_19-36-02/examples/light_left_2.png
+light_left;Record_V2/Record_2025-08-08_19-36-02/Images/1754674988300.png;analysis_result/Record_2025-08-08_19-36-02/examples/light_left_3.png
+light_right;Record_V2/Record_2025-08-08_19-36-02/Images/1754674872079.png;analysis_result/Record_2025-08-08_19-36-02/examples/light_right_1.png
+light_right;Record_V2/Record_2025-08-08_19-36-02/Images/1754674938575.png;analysis_result/Record_2025-08-08_19-36-02/examples/light_right_2.png
+light_right;Record_V2/Record_2025-08-08_19-36-02/Images/1754674881601.png;analysis_result/Record_2025-08-08_19-36-02/examples/light_right_3.png
+backward;Record_V2/Record_2025-08-08_19-36-02/Images/1754674960599.png;analysis_result/Record_2025-08-08_19-36-02/examples/backward_1.png
+backward;Record_V2/Record_2025-08-08_19-36-02/Images/1754674876015.png;analysis_result/Record_2025-08-08_19-36-02/examples/backward_2.png
+backward;Record_V2/Record_2025-08-08_19-36-02/Images/1754674966574.png;analysis_result/Record_2025-08-08_19-36-02/examples/backward_3.png
+stop;Record_V2/Record_2025-08-08_19-36-02/Images/1754674934387.png;analysis_result/Record_2025-08-08_19-36-02/examples/stop_1.png
+stop;Record_V2/Record_2025-08-08_19-36-02/Images/1754674982739.png;analysis_result/Record_2025-08-08_19-36-02/examples/stop_2.png
+stop;Record_V2/Record_2025-08-08_19-36-02/Images/1754674953546.png;analysis_result/Record_2025-08-08_19-36-02/examples/stop_3.png
