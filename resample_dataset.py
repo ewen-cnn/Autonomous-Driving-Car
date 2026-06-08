@@ -4,7 +4,7 @@ import bisect
 import pandas as pd
 
 DATASET_DIR = "Record_V2"
-OUTPUT_DIR = "segmentation"
+OUTPUT_DIR = "resampled_dataset"
 SAMPLE_PERIOD_MS = 250
 
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg")
@@ -74,52 +74,54 @@ def get_image_files(image_dir):
     return images
 
 
-def attach_previous_images(df, image_dir, output_image_dir):
+def attach_unique_previous_images(df, image_dir, output_image_dir):
     images = get_image_files(image_dir)
 
     if len(images) == 0:
         print("  [ATTENTION] Aucune image trouvée")
-        df["image_filename"] = None
-        df["image_time_ms"] = None
-        df["image_delta_ms"] = None
-        return df.iloc[0:0].copy(), 0, 0
+        return df.iloc[0:0].copy(), 0, len(df), 0
 
     os.makedirs(output_image_dir, exist_ok=True)
 
-    image_times = [img["timestamp"] for img in images]
-
+    image_idx = 0
     matched_rows = []
     copied_images = set()
-    no_image_before = 0
+
+    no_image_available = 0
+    skipped_images = 0
 
     for _, row in df.iterrows():
         csv_time = int(row["time_in_ms"])
 
-        # Image la plus proche temporellement, mais strictement avant ou égale au CSV
-        idx = bisect.bisect_right(image_times, csv_time) - 1
+        best_image = None
 
-        if idx < 0:
-            no_image_before += 1
+        # On avance tant que l'image est avant ou égale au timestamp CSV
+        while image_idx < len(images) and images[image_idx]["timestamp"] <= csv_time:
+            best_image = images[image_idx]
+            image_idx += 1
+            skipped_images += 1
+
+        # Si aucune image avant ce timestamp
+        if best_image is None:
+            no_image_available += 1
             continue
 
-        selected_image = images[idx]
-
         new_row = row.copy()
-        new_row["image_filename"] = selected_image["filename"]
-        new_row["image_time_ms"] = selected_image["timestamp"]
-        new_row["image_delta_ms"] = csv_time - selected_image["timestamp"]
+        new_row["image_filename"] = best_image["filename"]
+        new_row["image_time_ms"] = best_image["timestamp"]
+        new_row["image_delta_ms"] = csv_time - best_image["timestamp"]
 
         matched_rows.append(new_row)
 
-        if selected_image["filename"] not in copied_images:
-            dst = os.path.join(output_image_dir, selected_image["filename"])
-            shutil.copy2(selected_image["path"], dst)
-            copied_images.add(selected_image["filename"])
+        dst = os.path.join(output_image_dir, best_image["filename"])
+        shutil.copy2(best_image["path"], dst)
+        copied_images.add(best_image["filename"])
 
     matched_df = pd.DataFrame(matched_rows)
 
-    return matched_df, len(copied_images), no_image_before
+    unused_images = len(images) - len(copied_images)
 
+    return matched_df, len(copied_images), no_image_available, unused_images
 
 def motor_direction(gpio_a, gpio_b, side):
     if side == "left":
@@ -244,10 +246,10 @@ for record_name in sorted(os.listdir(DATASET_DIR)):
 
     os.makedirs(output_label_dir, exist_ok=True)
 
-    df_matched, copied_images, no_image_before = attach_previous_images(
-        df_resampled,
-        image_dir,
-        output_image_dir
+    df_matched, copied_images, no_image_before, unused_images = attach_unique_previous_images(
+    df_resampled,
+    image_dir,
+    output_image_dir
     )
 
     output_csv = os.path.join(output_label_dir, "labels.csv")
@@ -258,6 +260,7 @@ for record_name in sorted(os.listdir(DATASET_DIR)):
     print(f"Lignes gardées avec image      : {len(df_matched)}")
     print(f"Lignes supprimées sans image   : {no_image_before}")
     print(f"Images copiées                 : {copied_images}")
+    print(f"Images non utilisées             : {unused_images}")
     print(f"CSV généré                     : {output_csv}")
     print(f"Dossier images                 : {output_image_dir}")
 
@@ -273,10 +276,11 @@ for record_name in sorted(os.listdir(DATASET_DIR)):
 
 analysis_df = pd.DataFrame(analysis_rows)
 
-analysis_csv = os.path.join(OUTPUT_DIR, "resampling_analysis.csv")
+analysis_csv = os.path.join(OUTPUT_DIR, "dataset_analysis.csv")
 analysis_df.to_csv(analysis_csv, sep=";", index=False)
 
 print("\n==============================")
 print("TERMINÉ")
 print("==============================")
 print(f"Analyse globale : {analysis_csv}")
+
