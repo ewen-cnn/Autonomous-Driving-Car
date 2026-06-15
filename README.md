@@ -9,7 +9,6 @@ This repository now groups the full workflow in one place:
 
 ## Project layout
 
-- `GUIDE_UTILISATEUR.md`: detailed French guide for the repository architecture and file roles.
 - `Traitement/`: dataset preparation and balancing scripts.
 - `Entrainement/`: compatibility entrypoints for the training code that used to live there.
 - `actions.py`, `dataset.py`, `training.py`, `inference.py`: shared core modules.

@@ -5,7 +5,6 @@ from torchvision import transforms
 
 from config import DEFAULT_IMAGE_SIZE
 
-# ImageNet normalization is a reasonable default for RGB CNN pipelines.
 _NORMALIZE = transforms.Normalize(
     mean=[0.485, 0.456, 0.406],
     std=[0.229, 0.224, 0.225],
@@ -13,8 +12,6 @@ _NORMALIZE = transforms.Normalize(
 
 
 class AddGaussianNoise:
-    """Add bounded Gaussian noise after tensor conversion."""
-
     def __init__(self, mean: float = 0.0, std: float = 0.02) -> None:
         self.mean = mean
         self.std = std
@@ -25,7 +22,6 @@ class AddGaussianNoise:
 
 
 def build_train_transform(image_size: tuple[int, int] = DEFAULT_IMAGE_SIZE) -> transforms.Compose:
-    """Training pipeline with light augmentations that keep road semantics intact."""
     return transforms.Compose(
         [
             transforms.Resize(image_size),
@@ -40,7 +36,6 @@ def build_train_transform(image_size: tuple[int, int] = DEFAULT_IMAGE_SIZE) -> t
 
 
 def build_eval_transform(image_size: tuple[int, int] = DEFAULT_IMAGE_SIZE) -> transforms.Compose:
-    """Deterministic transform used for validation and inference."""
     return transforms.Compose(
         [
             transforms.Resize(image_size),

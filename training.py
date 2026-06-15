@@ -28,7 +28,6 @@ class TrainingConfig:
 
 
 def compute_accuracy(model: nn.Module, dataloader: DataLoader, device: torch.device) -> tuple[float, dict[str, float | None]]:
-    """Compute global and per-class accuracy on one dataloader."""
     model.eval()
     total = 0
     correct = 0
@@ -65,9 +64,6 @@ def compute_accuracy(model: nn.Module, dataloader: DataLoader, device: torch.dev
 
 
 def _build_dataloaders(config: TrainingConfig) -> tuple[DataLoader, DataLoader]:
-    """Split one labeled CSV into training and validation loaders."""
-    # Two dataset instances share the same samples but not the same transforms:
-    # training stays stochastic while validation remains deterministic.
     train_dataset = AutonomousCarDataset(
         csv_file=config.csv_file,
         image_dir=config.image_dir,
@@ -89,7 +85,6 @@ def _build_dataloaders(config: TrainingConfig) -> tuple[DataLoader, DataLoader]:
     validation_indices = indices[train_size:]
 
     if not validation_indices:
-        # Keep the split valid even on very small datasets.
         validation_indices = train_indices[-1:]
         train_indices = train_indices[:-1]
 
@@ -109,7 +104,6 @@ def _build_dataloaders(config: TrainingConfig) -> tuple[DataLoader, DataLoader]:
 
 
 def train_model(config: TrainingConfig) -> dict[str, float]:
-    """Train the CNN and save the best validation checkpoint."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader, validation_loader = _build_dataloaders(config)
 

@@ -9,7 +9,6 @@ from actions import normalize_model_action, row_to_model_action
 
 
 def _load_labels(csv_path: Path) -> pd.DataFrame:
-    """Load one labels file and normalize it to the model label space."""
     df = pd.read_csv(csv_path, sep=";", encoding="utf-8-sig")
     df.columns = df.columns.str.strip()
 
@@ -23,12 +22,10 @@ def _load_labels(csv_path: Path) -> pd.DataFrame:
 
 
 def collect_label_files(dataset_root: Path) -> list[Path]:
-    """Return every labels.csv found below one dataset root."""
     return sorted(dataset_root.rglob("labels.csv"))
 
 
 def summarize_dataset(dataset_root: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Compute per-record and global class counts for a prepared dataset."""
     label_files = collect_label_files(dataset_root)
     if not label_files:
         raise FileNotFoundError(f"No labels.csv files found under {dataset_root}")

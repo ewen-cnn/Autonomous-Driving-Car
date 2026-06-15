@@ -26,7 +26,6 @@ class BuildConfig:
 
 
 def collect_samples(input_root: Path) -> pd.DataFrame:
-    """Load every prepared labels file and keep samples usable by the model."""
     frames = []
     for csv_path in sorted(input_root.rglob("labels.csv")):
         image_dir = csv_path.parent.parent / "Images"
@@ -51,7 +50,6 @@ def collect_samples(input_root: Path) -> pd.DataFrame:
 
 
 def split_by_class(df: pd.DataFrame, config: BuildConfig) -> dict[str, pd.DataFrame]:
-    """Split each class independently to preserve class proportions per split."""
     random.seed(config.seed)
     parts = {"train": [], "valid": [], "test": []}
 
@@ -69,7 +67,6 @@ def split_by_class(df: pd.DataFrame, config: BuildConfig) -> dict[str, pd.DataFr
 
 
 def ensure_clean_output(output_root: Path) -> None:
-    """Recreate the output directory tree from scratch."""
     if output_root.exists():
         shutil.rmtree(output_root)
 
@@ -107,13 +104,6 @@ def _make_row(base_row: pd.Series, filename: str, direction: str, augmentation: 
 
 
 def build_split(split_name: str, df: pd.DataFrame, output_root: Path, target_per_class: int, seed: int) -> None:
-    """Build one split with a fixed target size per class.
-
-    When a class is under-represented, the function first reuses original
-    samples, then generates synthetic variety:
-    - left/right can be created by horizontally flipping the opposite class,
-    - the remaining classes use light brightness/contrast variations.
-    """
     output_rows = []
     image_dir = output_root / split_name / "Images"
 
@@ -144,13 +134,9 @@ def build_split(split_name: str, df: pd.DataFrame, output_root: Path, target_per
             if use_original:
                 _copy_image(src_path, dst_path)
             elif class_name in {"left", "right"} and not opposite_df.empty:
-                # A horizontal flip swaps left and right semantics while keeping
-                # the road scene otherwise realistic.
                 _flip_image(src_path, dst_path)
                 augmentation = f"flip_from_{opposite_class}"
             else:
-                # Non-directional classes cannot be mirrored into a different
-                # class, so we cycle through lightweight photometric changes.
                 cycle = index % 4
                 if cycle == 0:
                     _enhance_image(src_path, dst_path, brightness=0.85)

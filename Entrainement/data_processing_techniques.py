@@ -11,7 +11,6 @@ test_transform = build_eval_transform((224, 224))
 
 
 def weighted_sampler(df_train: pd.DataFrame, label_column: str = "pseudo_class") -> WeightedRandomSampler:
-    """Build an inverse-frequency sampler for imbalanced training data."""
     if label_column not in df_train.columns:
         raise KeyError(f"Missing label column: {label_column}")
 

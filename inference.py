@@ -12,7 +12,6 @@ from transforms import build_eval_transform
 
 
 def load_model(model_path: str = DEFAULT_MODEL_PATH, device: torch.device | None = None) -> tuple[DrivingCNN, dict]:
-    """Load a checkpoint and verify it matches the current class order."""
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(model_path, map_location=device)
 
@@ -30,11 +29,9 @@ def load_model(model_path: str = DEFAULT_MODEL_PATH, device: torch.device | None
 
 
 def predict_image(image_path: str | Path, model_path: str = DEFAULT_MODEL_PATH) -> tuple[str, float]:
-    """Predict one action label and its confidence from a single image."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, checkpoint = load_model(model_path=model_path, device=device)
 
-    # Reuse the image size stored in the checkpoint so inference matches training.
     image_size = tuple(checkpoint.get("image_size", checkpoint.get("img_size", DEFAULT_IMAGE_SIZE)))
     transform = build_eval_transform(image_size)
 

@@ -18,7 +18,6 @@ class ResampleConfig:
 
 
 def resample_commands(df: pd.DataFrame, sample_period_ms: int) -> pd.DataFrame:
-    """Resample raw motor commands to a fixed time grid."""
     df = df.sort_values("time_in_ms").reset_index(drop=True)
 
     start_time = int(df["time_in_ms"].iloc[0])
@@ -27,13 +26,10 @@ def resample_commands(df: pd.DataFrame, sample_period_ms: int) -> pd.DataFrame:
 
     original = df.set_index("time_in_ms")
     resampled = original.reindex(original.index.union(new_times)).sort_index()
-    # PWM-like speed values are continuous enough to interpolate in time.
     resampled["speedA"] = resampled["speedA"].interpolate(method="index")
     resampled["speedB"] = resampled["speedB"].interpolate(method="index")
 
     gpio_columns = ["GPIO1", "GPIO2", "GPIO3", "GPIO4"]
-    # GPIO states are discrete commands, so we keep the last known state until
-    # a new command arrives.
     resampled[gpio_columns] = resampled[gpio_columns].ffill()
 
     resampled = resampled.loc[new_times].reset_index()
@@ -46,7 +42,6 @@ def resample_commands(df: pd.DataFrame, sample_period_ms: int) -> pd.DataFrame:
 
 
 def get_image_files(image_dir: Path) -> list[dict[str, Path | int | str]]:
-    """Collect timestamped images from one acquisition folder."""
     if not image_dir.exists():
         return []
 
@@ -63,7 +58,6 @@ def get_image_files(image_dir: Path) -> list[dict[str, Path | int | str]]:
 
 
 def attach_unique_previous_images(df: pd.DataFrame, image_dir: Path, output_image_dir: Path) -> tuple[pd.DataFrame, int, int, int]:
-    """Attach the latest available image at or before each CSV timestamp."""
     images = get_image_files(image_dir)
     if not images:
         return df.iloc[0:0].copy(), 0, len(df), 0
@@ -79,8 +73,6 @@ def attach_unique_previous_images(df: pd.DataFrame, image_dir: Path, output_imag
         csv_time = int(row["time_in_ms"])
         selected_image = None
 
-        # We intentionally never look into the future: one command row can only
-        # use an image that already existed when the command was recorded.
         while image_index < len(images) and int(images[image_index]["timestamp"]) <= csv_time:
             selected_image = images[image_index]
             image_index += 1
@@ -112,7 +104,6 @@ def analyze_record(
     unused_images: int,
     sample_period_ms: int,
 ) -> dict[str, int | float | str]:
-    """Summarize how one record behaved during alignment."""
     result: dict[str, int | float | str] = {
         "record": record_name,
         "sample_period_ms": sample_period_ms,
@@ -133,7 +124,6 @@ def analyze_record(
 
 
 def process_dataset(config: ResampleConfig) -> pd.DataFrame:
-    """Resample every raw record and write the aligned dataset to disk."""
     config.output_dir.mkdir(parents=True, exist_ok=True)
     analysis_rows = []
 
