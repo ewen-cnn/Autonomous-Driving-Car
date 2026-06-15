@@ -7,7 +7,7 @@ from PIL import Image
 
 from torch.utils.data import WeightedRandomSampler
 
-from data_processing_techniques import (
+from Entrainement.data_processing_techniques import (
     AddGaussianNoise,
     train_transform,
     test_transform,
