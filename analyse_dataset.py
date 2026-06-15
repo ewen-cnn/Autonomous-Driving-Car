@@ -6,27 +6,8 @@
 
 import os
 import pandas as pd
+from config import CLASSES, DATASET_DIR, OUTPUT_DIR, SAMPLE_PERIOD_MS
 
-# =========================
-# CONFIGURATION
-# =========================
-
-DATASET_DIR = "Record_V2"
-OUTPUT_DIR = "segmentation"
-SAMPLE_PERIOD_MS = 250
-
-CLASSES = [
-    "forward",
-    "light_left",
-    "light_right",
-    "pivot_left",
-    "pivot_right",
-    "sharp_left",
-    "sharp_right",
-    "backward",
-    "stop",
-    "other"
-]
 
 
 # =========================
@@ -173,64 +154,64 @@ def analyze_resampled_csv(record_name, df_original, df_resampled):
 # =========================
 # MAIN
 # =========================
+def main():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+    analysis_rows = []
 
-analysis_rows = []
+    print("\n==============================")
+    print("RÉÉCHANTILLONNAGE DES CSV")
+    print("==============================")
+    print(f"Dossier source        : {DATASET_DIR}")
+    print(f"Dossier sortie        : {OUTPUT_DIR}")
+    print(f"Période échantillonnage : {SAMPLE_PERIOD_MS} ms")
 
-print("\n==============================")
-print("RÉÉCHANTILLONNAGE DES CSV")
-print("==============================")
-print(f"Dossier source        : {DATASET_DIR}")
-print(f"Dossier sortie        : {OUTPUT_DIR}")
-print(f"Période échantillonnage : {SAMPLE_PERIOD_MS} ms")
+    for record_name in sorted(os.listdir(DATASET_DIR)):
+        record_path = os.path.join(DATASET_DIR, record_name)
 
-for record_name in sorted(os.listdir(DATASET_DIR)):
-    record_path = os.path.join(DATASET_DIR, record_name)
+        if not os.path.isdir(record_path):
+            continue
 
-    if not os.path.isdir(record_path):
-        continue
+        csv_path = os.path.join(record_path, "labels.csv")
 
-    csv_path = os.path.join(record_path, "labels.csv")
+        if not os.path.exists(csv_path):
+            print(f"\n[IGNORÉ] {record_name} : labels.csv introuvable")
+            continue
 
-    if not os.path.exists(csv_path):
-        print(f"\n[IGNORÉ] {record_name} : labels.csv introuvable")
-        continue
+        print("\n------------------------------")
+        print(f"Record : {record_name}")
 
-    print("\n------------------------------")
-    print(f"Record : {record_name}")
+        df_original = pd.read_csv(csv_path, sep=";")
+        df_original = df_original.sort_values("time_in_ms").reset_index(drop=True)
 
-    df_original = pd.read_csv(csv_path, sep=";")
-    df_original = df_original.sort_values("time_in_ms").reset_index(drop=True)
+        df_resampled = resample_commands(df_original, SAMPLE_PERIOD_MS)
 
-    df_resampled = resample_commands(df_original, SAMPLE_PERIOD_MS)
+        output_dir = os.path.join(OUTPUT_DIR, record_name, "labels")
+        os.makedirs(output_dir, exist_ok=True)
 
-    output_dir = os.path.join(OUTPUT_DIR, record_name, "labels")
-    os.makedirs(output_dir, exist_ok=True)
+        output_csv = os.path.join(output_dir, "labels.csv")
 
-    output_csv = os.path.join(output_dir, "labels.csv")
+        df_resampled.to_csv(output_csv, sep=";", index=False)
 
-    df_resampled.to_csv(output_csv, sep=";", index=False)
+        rows_created = max(0, len(df_resampled) - len(df_original))
+        rows_removed = max(0, len(df_original) - len(df_resampled))
 
-    rows_created = max(0, len(df_resampled) - len(df_original))
-    rows_removed = max(0, len(df_original) - len(df_resampled))
+        print(f"Lignes originales       : {len(df_original)}")
+        print(f"Lignes rééchantillonnées: {len(df_resampled)}")
+        print(f"Lignes créées           : {rows_created}")
+        print(f"Lignes supprimées       : {rows_removed}")
+        print(f"CSV généré              : {output_csv}")
 
-    print(f"Lignes originales       : {len(df_original)}")
-    print(f"Lignes rééchantillonnées: {len(df_resampled)}")
-    print(f"Lignes créées           : {rows_created}")
-    print(f"Lignes supprimées       : {rows_removed}")
-    print(f"CSV généré              : {output_csv}")
+        analysis_rows.append(
+            analyze_resampled_csv(record_name, df_original, df_resampled)
+        )
 
-    analysis_rows.append(
-        analyze_resampled_csv(record_name, df_original, df_resampled)
-    )
+    analysis_df = pd.DataFrame(analysis_rows)
 
-analysis_df = pd.DataFrame(analysis_rows)
+    analysis_csv = os.path.join(OUTPUT_DIR, "resampling_analysis.csv")
+    analysis_df.to_csv(analysis_csv, sep=";", index=False)
 
-analysis_csv = os.path.join(OUTPUT_DIR, "resampling_analysis.csv")
-analysis_df.to_csv(analysis_csv, sep=";", index=False)
-
-print("\n==============================")
-print("TERMINÉ")
-print("==============================")
-print(f"Fichier d'analyse : {analysis_csv}")
+    print("\n==============================")
+    print("TERMINÉ")
+    print("==============================")
+    print(f"Fichier d'analyse : {analysis_csv}")

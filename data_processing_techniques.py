@@ -12,6 +12,8 @@ import torchvision.transforms as transforms
 
 from sklearn.model_selection import train_test_split
 
+from analyse_dataset import CLASSES as CLASS_NAMES
+
 # ============================================================
 # AUGMENTATION
 # ============================================================
@@ -77,7 +79,7 @@ test_transform = transforms.Compose([
 # REBALANCING
 # ============================================================
 
-def weighted_sampler(df_train: pd.DataFrame) ->WeightedRandomSampler:
+def weighted_sampler(df_train: pd.DataFrame) -> WeightedRandomSampler:
     """
     Crée un sampler qui sur-échantillonne les pseudo-classes rares.
     """
@@ -85,24 +87,28 @@ def weighted_sampler(df_train: pd.DataFrame) ->WeightedRandomSampler:
 
     class_counts = Counter(classes)
 
-    print ("\n Distribution train avant rebalancing :")
+    print("\nDistribution train avant rebalancing :")
     for class_id, count in sorted(class_counts.items()):
-        print(f"{CLASS_NAMES[class_id]:> 8s}: {count}")
+        print(f"{CLASS_NAMES[class_id]:>8s}: {count}")
 
-        class_weights = {
-            class_id: 1.0 / count
-            for class_id, count in class_counts.items() 
-        }
+    class_weights = {
+        class_id: 1.0 / count
+        for class_id, count in class_counts.items()
+    }
 
-        sample_weights = [
-            class_weights[class_id]
-            for class_id in classes
-        ]
+    sample_weights = [
+        class_weights[class_id]
+        for class_id in classes
+    ]
 
-        sampler = WeightedRandomSampler(
-            weights = torch.DoubleTensor(sample_weights),
-            num_samples= len (sample_weights),
-            replacement= True
-        )
+    sampler = WeightedRandomSampler(
+        weights=torch.DoubleTensor(sample_weights),
+        num_samples=len(sample_weights),
+        replacement=True
+    )
 
-        return sampler
+    print("Echantillon:", sampler)
+    return sampler
+
+def main():
+    weighted_sampler()
