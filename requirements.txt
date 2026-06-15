@@ -1,0 +1,5 @@
+pandas
+Pillow
+pytest
+torch
+torchvision
