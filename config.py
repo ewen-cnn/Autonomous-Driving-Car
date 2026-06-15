@@ -1,11 +1,15 @@
-# =========================
-# CONFIGURATION
-# =========================
-
+# Dataset locations
 DATASET_DIR = "dataSet"
 OUTPUT_DIR = "segmentation"
+BALANCED_DATASET_DIR = "dataset_augmente_equilibre"
+ANALYSIS_DIR = "analysis_result"
+
+# Model defaults
+DEFAULT_MODEL_PATH = "driving_cnn.pth"
+DEFAULT_IMAGE_SIZE = (120, 160)
 SAMPLE_PERIOD_MS = 250
 
+# Raw direction labels found in CSV exports.
 CLASSES = [
     "forward",
     "light_left",
@@ -16,8 +20,14 @@ CLASSES = [
     "sharp_right",
     "backward",
     "stop",
-    "other"
+    "other",
 ]
 
-CLASS_TO_IDX = {name: i for i, name in enumerate(CLASSES)}
-IDX_TO_CLASS = {i: name for name, i in CLASS_TO_IDX.items()}
+# Training/inference uses a simplified 3-class decision space.
+MODEL_CLASSES = ["left", "forward", "right"]
+
+RAW_CLASS_TO_IDX = {name: index for index, name in enumerate(CLASSES)}
+CLASS_TO_IDX = {name: index for index, name in enumerate(MODEL_CLASSES)}
+IDX_TO_CLASS = {index: name for name, index in CLASS_TO_IDX.items()}
+
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg")
