@@ -1,16 +1,11 @@
 Records/
 Record_V2/
-dataSet/
-segmentation/
-resampled_dataset/
 dataset_augmente_equilibre/
-analysis_result/
-test_1image/
 
 Records.zip
 Record_V2.zip
-resampled_dataset.zip
-dataset_final.zip
+resampled_dataset_augmente_equilibre.zip
+dataset_augmente_equilibre_final.zip
 *.pth
 
 .venv/

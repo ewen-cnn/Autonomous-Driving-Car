@@ -1,6 +1,6 @@
 import argparse
 
-from config import BALANCED_DATASET_DIR, DEFAULT_MODEL_PATH
+from config import BALANCED_dataset_DIR, DEFAULT_MODEL_PATH
 from training import TrainingConfig, train_model
 
 
@@ -8,12 +8,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the driving action classifier.")
     parser.add_argument(
         "--csv-file",
-        default=f"{BALANCED_DATASET_DIR}/train/labels/labels.csv",
+        default=f"{BALANCED_dataset_DIR}/train/labels/labels.csv",
         help="CSV file containing image references and direction labels.",
     )
     parser.add_argument(
         "--image-dir",
-        default=f"{BALANCED_DATASET_DIR}/train/Images",
+        default=f"{BALANCED_dataset_DIR}/train/Images",
         help="Directory containing the images referenced by the CSV.",
     )
     parser.add_argument("--model-path", default=DEFAULT_MODEL_PATH, help="Where to save the best checkpoint.")

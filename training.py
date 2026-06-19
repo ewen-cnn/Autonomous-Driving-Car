@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, Subset
 
 from actions import CLASSES, IDX_TO_CLASS
 from config import DEFAULT_IMAGE_SIZE, DEFAULT_MODEL_PATH
-from dataset import AutonomousCarDataset
+from dataset import AutonomousCardataset
 from model import DrivingCNN
 from transforms import build_eval_transform, build_train_transform
 
@@ -64,12 +64,12 @@ def compute_accuracy(model: nn.Module, dataloader: DataLoader, device: torch.dev
 
 
 def _build_dataloaders(config: TrainingConfig) -> tuple[DataLoader, DataLoader]:
-    train_dataset = AutonomousCarDataset(
+    train_dataset = AutonomousCardataset(
         csv_file=config.csv_file,
         image_dir=config.image_dir,
         transform=build_train_transform(config.image_size),
     )
-    validation_dataset = AutonomousCarDataset(
+    validation_dataset = AutonomousCardataset(
         csv_file=config.csv_file,
         image_dir=config.image_dir,
         transform=build_eval_transform(config.image_size),

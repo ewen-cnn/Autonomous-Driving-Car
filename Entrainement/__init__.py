@@ -1,3 +1,3 @@
-from .Acquisition import AutonomousCarDataset
+from .Acquisition import AutonomousCardataset
 
-__all__ = ["AutonomousCarDataset"]
+__all__ = ["AutonomousCardataset"]

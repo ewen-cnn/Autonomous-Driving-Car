@@ -1,4 +1,4 @@
-from Entrainement.analyse_dataset import *  # noqa: F401,F403
+from Entrainement import *  # noqa: F401,F403
 
 
 if __name__ == "__main__":

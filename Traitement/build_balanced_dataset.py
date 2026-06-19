@@ -9,13 +9,13 @@ import pandas as pd
 from PIL import Image, ImageEnhance
 
 from actions import CLASSES, normalize_model_action, row_to_model_action
-from config import BALANCED_DATASET_DIR, IMAGE_EXTENSIONS
+from config import BALANCED_dataset_DIR, IMAGE_EXTENSIONS
 
 
 @dataclass
 class BuildConfig:
     input_root: Path = Path("segmentation")
-    output_root: Path = Path(BALANCED_DATASET_DIR)
+    output_root: Path = Path(BALANCED_dataset_DIR)
     train_ratio: float = 0.7
     valid_ratio: float = 0.15
     test_ratio: float = 0.15

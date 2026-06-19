@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 from actions import CLASS_TO_IDX, normalize_model_action, row_to_model_action
 
 
-class AutonomousCarDataset(Dataset):
+class AutonomousCardataset(Dataset):
     def __init__(
         self,
         csv_file: str | Path,

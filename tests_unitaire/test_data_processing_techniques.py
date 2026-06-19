@@ -222,7 +222,7 @@ def test_weighted_sampler_inverse_class_weights():
 def test_weighted_sampler_sampling_reduces_imbalance():
     """
     Test statistique simple :
-    On crée un dataset très déséquilibré :
+    On crée un dataset_augmente_equilibre très déséquilibré :
     - classe 0 : 900 exemples
     - classe 1 : 100 exemples
 

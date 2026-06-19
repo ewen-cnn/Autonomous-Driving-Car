@@ -1,10 +1,10 @@
-# Dataset preparation
+# dataset_augmente_equilibre preparation
 
 The repository now separates raw acquisition, preparation and model training.
 
 ## Raw data
 
-Expected raw records live under `dataSet/` and each record should contain:
+Expected raw records live under `dataset_augmente_equilibre/` and each record should contain:
 
 - `labels.csv`
 - `Images/`
@@ -14,20 +14,20 @@ Expected raw records live under `dataSet/` and each record should contain:
 Run:
 
 ```bash
-python Traitement/resample_dataset.py
+python Traitement/resample_dataset_augmente_equilibre.py
 ```
 
 This resamples motor commands at a fixed period and associates each row with the latest available image.
 
-## Step 2: balanced dataset generation
+## Step 2: balanced dataset_augmente_equilibre generation
 
 Run:
 
 ```bash
-python Traitement/build_balanced_dataset.py
+python Traitement/build_balanced_dataset_augmente_equilibre.py
 ```
 
-This creates `dataset_augmente_equilibre/` with `train/`, `valid/` and `test/` splits.
+This creates `dataset_augmente_equilibre_augmente_equilibre/` with `train/`, `valid/` and `test/` splits.
 
 ## Step 3: distribution inspection
 

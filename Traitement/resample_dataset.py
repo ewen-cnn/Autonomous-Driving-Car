@@ -7,12 +7,12 @@ from pathlib import Path
 import pandas as pd
 
 from actions import classify_direction
-from config import DATASET_DIR, IMAGE_EXTENSIONS, OUTPUT_DIR, SAMPLE_PERIOD_MS
+from config import dataset_DIR, IMAGE_EXTENSIONS, OUTPUT_DIR, SAMPLE_PERIOD_MS
 
 
 @dataclass
 class ResampleConfig:
-    dataset_dir: Path = Path(DATASET_DIR)
+    dataset_dir: Path = Path(dataset_DIR)
     output_dir: Path = Path(OUTPUT_DIR)
     sample_period_ms: int = SAMPLE_PERIOD_MS
 

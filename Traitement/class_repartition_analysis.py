@@ -51,8 +51,8 @@ def summarize_dataset(dataset_root: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Summarize direction distribution in a prepared dataset.")
-    parser.add_argument("dataset_root", nargs="?", default="segmentation")
+    parser = argparse.ArgumentParser(description="Summarize direction distribution in a prepared dataset_augmente_equilibre.")
+    parser.add_argument("dataset_augmente_equilibre_root", nargs="?", default="segmentation")
     args = parser.parse_args()
 
     dataset_root = Path(args.dataset_root)

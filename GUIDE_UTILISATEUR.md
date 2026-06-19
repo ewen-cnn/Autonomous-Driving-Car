@@ -6,11 +6,11 @@ Ce depot sert a preparer un jeu de donnees de conduite, entrainer un modele de c
 
 Le projet suit ce flux :
 
-1. lire les enregistrements bruts dans `dataSet/`,
+1. lire les enregistrements bruts dans `dataset/`,
 2. reechantillonner les commandes et les aligner avec les images dans `segmentation/`,
-3. construire un dataset equilibre dans `dataset_augmente_equilibre/`,
+3. construire un dataset dans `dataset_augmente_equilibre/`,
 4. entrainer un CNN pour predire `left`, `forward` ou `right`,
-5. reutiliser le modele entraine pour classer une nouvelle image.
+5. ré-utiliser le modele entraine pour classer une nouvelle image.
 
 ## 2. Architecture generale
 
@@ -46,7 +46,7 @@ Arborescence logique :
 
 ### Etape 1 - Donnees brutes
 
-`dataSet/` contient les enregistrements bruts. Chaque enregistrement doit en pratique contenir :
+`dataset/` contient les enregistrements bruts. Chaque enregistrement doit en pratique contenir :
 
 - un `labels.csv` avec les vitesses moteurs, etats GPIO et timestamps,
 - un dossier `Images/` contenant les images nommees par timestamp.
@@ -62,7 +62,7 @@ Sortie :
 - les images effectivement associees,
 - `resampling_analysis.csv` pour un resume global.
 
-### Etape 3 - Construction du dataset equilibre
+### Etape 3 - Construction du dataset augmente
 
 `Traitement/build_balanced_dataset.py` lit `segmentation/`, convertit les labels fins en trois classes (`left`, `forward`, `right`), cree les splits `train`, `valid`, `test` et complete les classes rares par augmentation.
 
@@ -97,7 +97,7 @@ Role : centraliser les constantes globales du projet.
 
 Ce fichier definit notamment :
 
-- les chemins des dossiers (`DATASET_DIR`, `OUTPUT_DIR`, `BALANCED_DATASET_DIR`),
+- les chemins des dossiers (`dataset__DIR`, `OUTPUT_DIR`, `BALANCED_dataset_DIR`),
 - le chemin du modele (`DEFAULT_MODEL_PATH`),
 - la taille d'image par defaut (`DEFAULT_IMAGE_SIZE`),
 - la periode de reechantillonnage (`SAMPLE_PERIOD_MS`),
@@ -129,11 +129,11 @@ Notions a bien comprendre :
 
 ### `dataset.py`
 
-Role : fournir un `Dataset` PyTorch reutilisable.
+Role : fournir un `dataset` PyTorch reutilisable.
 
 Classe principale :
 
-- `AutonomousCarDataset`
+- `AutonomousCardataset`
 
 Fonctions importantes :
 
@@ -143,7 +143,7 @@ Fonctions importantes :
 
 Notion importante :
 
-- Le dataset filtre des la construction les echantillons inutilisables : image absente, label inconnu ou label ignore.
+- Le dataset_augmente_equilibre filtre des la construction les echantillons inutilisables : image absente, label inconnu ou label ignore.
 
 ### `transforms.py`
 
@@ -190,7 +190,7 @@ Elements importants :
 
 Notions a bien comprendre :
 
-- Le code cree deux instances du dataset : une pour le train avec augmentations aleatoires, une pour la validation avec transformations deterministes.
+- Le code cree deux instances du dataset_augmente_equilibre : une pour le train avec augmentations aleatoires, une pour la validation avec transformations deterministes.
 - Le checkpoint sauvegarde non seulement les poids, mais aussi l'ordre des classes et la taille d'image.
 
 ### `inference.py`
@@ -263,7 +263,7 @@ Contenu actuel :
 
 ### `.gitignore`
 
-Role : eviter de versionner les datasets generes, les checkpoints, les environnements virtuels et les fichiers temporaires.
+Role : eviter de versionner les dataset_augmente_equilibres generes, les checkpoints, les environnements virtuels et les fichiers temporaires.
 
 ### `notes_classification.txt`
 
@@ -313,9 +313,9 @@ Notions a bien comprendre :
 - Les GPIO sont propages par `forward fill`, car on suppose qu'un etat reste valide jusqu'a la commande suivante.
 - L'image choisie est volontairement l'image precedente la plus proche, jamais une image future.
 
-### `Traitement/build_balanced_dataset.py`
+### `Traitement/build_balanced.py`
 
-Role : fabriquer un dataset d'apprentissage equilibre.
+Role : fabriquer un dataset_augmente_equilibre d'apprentissage equilibre.
 
 Fonctions importantes :
 
@@ -332,7 +332,7 @@ Notions a bien comprendre :
 
 ### `Traitement/class_repartition_analysis.py`
 
-Role : mesurer la distribution des classes dans un dataset prepare.
+Role : mesurer la distribution des classes dans un dataset_augmente_equilibre prepare.
 
 Fonctions importantes :
 
@@ -360,7 +360,7 @@ Ce dossier contient des points d'entree historiques et des re-exports utiles pou
 
 ### `Entrainement/Acquisition.py`
 
-Role : re-exporte `AutonomousCarDataset` depuis `dataset.py`.
+Role : re-exporte `AutonomousCardataset` depuis `dataset.py`.
 
 ### `Entrainement/analyse_dataset.py`
 
@@ -380,7 +380,7 @@ Role : point d'entree historique vers `Traitement.resample_dataset`.
 
 ### `Entrainement/__init__.py`
 
-Role : expose `AutonomousCarDataset` au niveau du package.
+Role : expose `AutonomousCardataset` au niveau du package.
 
 ## 7. Dossier `tests_unitaire/`
 
@@ -449,6 +449,6 @@ pytest tests_unitaire
 Si tu veux retenir une seule idee, la voici :
 
 - `actions.py` convertit la telemetrie en labels,
-- `Traitement/` fabrique un dataset propre et equilibre,
+- `Traitement/` fabrique un dataset_augmente_equilibre propre et equilibre,
 - `training.py` entraine le CNN,
 - `inference.py` recharge le modele pour predire sur une image.

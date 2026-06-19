@@ -1,7 +1,7 @@
-# Dataset locations
-DATASET_DIR = "dataSet"
+# dataset_augmente_equilibre locations
+dataset_DIR = "dataset_augmente_equilibre"
 OUTPUT_DIR = "segmentation"
-BALANCED_DATASET_DIR = "dataset_augmente_equilibre"
+BALANCED_dataset_DIR = "dataset_augmente_equilibre"
 ANALYSIS_DIR = "analysis_result"
 
 # Model defaults
