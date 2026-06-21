@@ -6,6 +6,7 @@ ANALYSIS_DIR = "analysis_result"
 
 # Model defaults
 DEFAULT_MODEL_PATH = "driving_cnn.pth"
+MULTITASK_MODEL_PATH = "MULTITASK_DRIVING_CNN.pth"
 DEFAULT_IMAGE_SIZE = (120, 160)
 SAMPLE_PERIOD_MS = 250
 
