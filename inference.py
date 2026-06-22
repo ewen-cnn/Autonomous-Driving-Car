@@ -8,7 +8,7 @@ from PIL import Image
 from actions import CLASSES, IDX_TO_CLASS
 from config import DEFAULT_IMAGE_SIZE, DEFAULT_MODEL_PATH
 from model import DrivingCNN
-from transforms import build_eval_transform
+from Traitement.transforms import build_eval_transform
 
 
 def load_model(model_path: str = DEFAULT_MODEL_PATH, device: torch.device | None = None) -> tuple[DrivingCNN, dict]:

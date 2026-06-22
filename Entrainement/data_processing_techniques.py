@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 from torch.utils.data import WeightedRandomSampler
 
-from transforms import AddGaussianNoise, build_eval_transform, build_train_transform
+from Traitement.transforms import AddGaussianNoise, build_eval_transform, build_train_transform
 
 train_transform = build_train_transform((224, 224))
 test_transform = build_eval_transform((224, 224))

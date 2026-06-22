@@ -1,38 +1,45 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset
 from sklearn.metrics import confusion_matrix, classification_report
 from torchvision import transforms
 
 from actions import CLASSES, IDX_TO_CLASS
-from config import DEFAULT_IMAGE_SIZE, MULTITASK_MODEL_PATH, BALANCED_dataset_DIR
-from dataset import AutonomousCardataset
+from config import DEFAULT_IMAGE_SIZE, MULTITASK_MODEL_PATH
 from model import DrivingCNN
-from transforms import build_eval_transform, build_train_transform
 
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
 
-DATASET_ROOT = Path("dataset_augmente_equilibre")
-
-
-
 BATCH_SIZE = 32
 EPOCHS = 20
 LEARNING_RATE = 1e-3
 NUM_WORKERS = 0
 SEED = 42
+
+# Poids de la loss régression dans la loss totale.
+# Plus il est grand, plus le modèle privilégie speedA/speedB.
+REGRESSION_WEIGHT = 0.3
+
+# Utilisé pour normaliser speedA/speedB dans la loss.
+MAX_ABS_SPEED = 100.0
+
 MIN_CLASS_ACCURACY = {
     "left": 0.90,
     "forward": 0.60,
     "right": 0.92,
 }
+
 LABEL_ROOT = Path("dataset_augmente_equilibre")
 IMAGE_ROOT = Path("dataset_augmente_equilibre")
 
@@ -44,24 +51,205 @@ TRAIN_IMAGE_DIR = IMAGE_ROOT / "train" / "Images"
 VALID_IMAGE_DIR = IMAGE_ROOT / "valid" / "Images"
 TEST_IMAGE_DIR = IMAGE_ROOT / "test" / "Images"
 
+CLASS_TO_IDX = {class_name: idx for idx, class_name in enumerate(CLASSES)}
+
+
+# =============================================================================
+# DATASET MULTI-TÂCHE
+# =============================================================================
+
+class MultiTaskAutonomousCarDataset(Dataset):
+    """
+    Dataset pour entraînement multi-tâche.
+
+    Retourne :
+        image         : Tensor [3, H, W]
+        action_label  : Tensor long, classe left/forward/right
+        motor_target  : Tensor float [speedA, speedB]
+    """
+
+    POSSIBLE_IMAGE_COLUMNS = [
+        "image_filename",
+        "image_path",
+        "image",
+        "filename",
+        "file_name",
+        "image_name",
+        "path",
+    ]
+
+    POSSIBLE_LABEL_COLUMNS = [
+        "direction_class",
+        "label",
+        "class",
+        "action",
+    ]
+
+    def __init__(
+        self,
+        csv_file: str | Path,
+        image_dir: str | Path,
+        transform=None,
+    ):
+        self.csv_file = Path(csv_file)
+        self.image_dir = Path(image_dir)
+        self.transform = transform
+
+        sep = self.detect_separator(self.csv_file)
+        self.data = pd.read_csv(self.csv_file, sep=sep, encoding="utf-8-sig")
+
+        self.image_col = self.find_column(
+            self.data,
+            self.POSSIBLE_IMAGE_COLUMNS,
+            "image",
+        )
+
+        self.label_col = self.find_column(
+            self.data,
+            self.POSSIBLE_LABEL_COLUMNS,
+            "label",
+        )
+
+        self.check_required_columns()
+
+    @staticmethod
+    def detect_separator(csv_path: Path) -> str:
+        first_line = csv_path.read_text(encoding="utf-8-sig").splitlines()[0]
+        return ";" if ";" in first_line else ","
+
+    @staticmethod
+    def find_column(
+        df: pd.DataFrame,
+        possible_columns: list[str],
+        description: str,
+    ) -> str:
+        for col in possible_columns:
+            if col in df.columns:
+                return col
+
+        raise ValueError(
+            f"Impossible de détecter la colonne {description}. "
+            f"Colonnes disponibles : {list(df.columns)}"
+        )
+
+    def check_required_columns(self) -> None:
+        required_columns = ["speedA", "speedB"]
+
+        for col in required_columns:
+            if col not in self.data.columns:
+                raise ValueError(
+                    f"Colonne obligatoire absente : {col}. "
+                    f"Colonnes disponibles : {list(self.data.columns)}"
+                )
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int):
+        row = self.data.iloc[idx]
+
+        image_name = Path(str(row[self.image_col])).name
+        image_path = self.image_dir / image_name
+
+        if not image_path.exists():
+            raise FileNotFoundError(f"Image introuvable : {image_path}")
+
+        image = Image.open(image_path).convert("RGB")
+
+        if self.transform is not None:
+            image = self.transform(image)
+
+        label_name = str(row[self.label_col]).strip()
+
+        if label_name not in CLASS_TO_IDX:
+            raise ValueError(
+                f"Classe inconnue : {label_name}. "
+                f"Classes attendues : {CLASSES}"
+            )
+
+        action_label = torch.tensor(
+            CLASS_TO_IDX[label_name],
+            dtype=torch.long,
+        )
+
+        motor_target = torch.tensor(
+            [
+                float(row["speedA"]),
+                float(row["speedB"]),
+            ],
+            dtype=torch.float32,
+        )
+
+        return image, action_label, motor_target
+
+
+# =============================================================================
+# LOSS MULTI-TÂCHE
+# =============================================================================
+
+class MultiTaskDrivingLoss(nn.Module):
+    """
+    Loss multi-tâche :
+    - classification : CrossEntropyLoss
+    - régression moteur : SmoothL1Loss
+
+    La régression est normalisée par MAX_ABS_SPEED pour éviter que
+    les valeurs moteur dominent trop fortement la loss totale.
+    """
+
+    def __init__(
+        self,
+        regression_weight: float = 0.3,
+        max_abs_speed: float = 100.0,
+    ):
+        super().__init__()
+
+        self.regression_weight = regression_weight
+        self.max_abs_speed = max_abs_speed
+
+        self.classification_loss = nn.CrossEntropyLoss()
+        self.regression_loss = nn.SmoothL1Loss()
+
+    def forward(
+        self,
+        outputs: dict[str, torch.Tensor],
+        action_labels: torch.Tensor,
+        motor_targets: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict[str, float]]:
+        logits = outputs["logits"]
+        motor_predictions = outputs["motor_commands"]
+
+        loss_cls = self.classification_loss(
+            logits,
+            action_labels.long(),
+        )
+
+        loss_reg = self.regression_loss(
+            motor_predictions / self.max_abs_speed,
+            motor_targets / self.max_abs_speed,
+        )
+
+        loss_total = loss_cls + self.regression_weight * loss_reg
+
+        metrics = {
+            "loss_total": float(loss_total.item()),
+            "loss_classification": float(loss_cls.item()),
+            "loss_regression": float(loss_reg.item()),
+        }
+
+        return loss_total, metrics
+
+
 # =============================================================================
 # OUTILS
 # =============================================================================
 
-
 def check_path_exists(path: Path, description: str) -> None:
-    """
-    Vérifie qu'un chemin existe.
-    Arrête proprement le programme si un fichier/dossier est introuvable.
-    """
     if not path.exists():
         raise FileNotFoundError(f"{description} introuvable : {path}")
 
 
 def check_dataset_paths() -> None:
-    """
-    Vérifie que les CSV et les dossiers d'images existent.
-    """
     check_path_exists(TRAIN_CSV, "CSV d'entraînement")
     check_path_exists(VALID_CSV, "CSV de validation")
     check_path_exists(TEST_CSV, "CSV de test")
@@ -71,186 +259,20 @@ def check_dataset_paths() -> None:
     check_path_exists(TEST_IMAGE_DIR, "Dossier images de test")
 
 
-def create_train_transform():
-    """
-    Crée la transformation d'entraînement.
-
-    Cette fonction est volontairement tolérante :
-    elle fonctionne que build_train_transform attende :
-    - image_size=...
-    - DEFAULT_IMAGE_SIZE en argument positionnel
-    - aucun argument
-    """
-    try:
-        return build_train_transform(image_size=DEFAULT_IMAGE_SIZE)
-    except TypeError:
-        try:
-            return build_train_transform(DEFAULT_IMAGE_SIZE)
-        except TypeError:
-            return build_train_transform()
-
-
-def create_eval_transform():
-    """
-    Crée la transformation de validation/test.
-    """
-    try:
-        return build_eval_transform(image_size=DEFAULT_IMAGE_SIZE)
-    except TypeError:
-        try:
-            return build_eval_transform(DEFAULT_IMAGE_SIZE)
-        except TypeError:
-            return build_eval_transform()
-
-
 def create_model(device: torch.device) -> nn.Module:
-    """
-    Crée le modèle CNN.
-
-    Cette fonction gère plusieurs signatures possibles de DrivingCNN :
-    - DrivingCNN(num_classes=...)
-    - DrivingCNN(...)
-    - DrivingCNN()
-    """
-    try:
-        model = DrivingCNN(num_classes=len(CLASSES))
-    except TypeError:
-        try:
-            model = DrivingCNN(len(CLASSES))
-        except TypeError:
-            model = DrivingCNN()
+    model = DrivingCNN(
+        num_classes=len(CLASSES),
+        output_dim=2,
+        max_abs_speed=MAX_ABS_SPEED,
+    )
 
     return model.to(device)
 
-
-def compute_accuracy(
-    model: nn.Module,
-    dataloader: DataLoader,
-    device: torch.device,
-) -> tuple[float, dict[str, float | None]]:
-    """
-    Calcule :
-    - l'accuracy globale
-    - l'accuracy par classe
-    """
-    model.eval()
-
-    total = 0
-    correct = 0
-
-    class_total = {class_name: 0 for class_name in CLASSES}
-    class_correct = {class_name: 0 for class_name in CLASSES}
-
-    with torch.no_grad():
-        for images, labels in dataloader:
-            images = images.to(device)
-            labels = labels.to(device)
-
-            #outputs = model(images)
-            #predictions = torch.argmax(outputs, dim=1)
-
-            outputs = model(images)
-
-            if isinstance(outputs, dict):
-                logits = outputs["logits"]
-            else:
-                logits = outputs
-
-            predictions = torch.argmax(logits, dim=1)
-
-            total += labels.size(0)
-            correct += (predictions == labels).sum().item()
-
-            for prediction, label in zip(predictions, labels):
-                label_idx = label.item()
-                pred_idx = prediction.item()
-
-                label_name = IDX_TO_CLASS[label_idx]
-
-                class_total[label_name] += 1
-
-                if pred_idx == label_idx:
-                    class_correct[label_name] += 1
-
-    global_accuracy = correct / total if total > 0 else 0.0
-
-    class_accuracy: dict[str, float | None] = {}
-
-    for class_name in CLASSES:
-        if class_total[class_name] == 0:
-            class_accuracy[class_name] = None
-        else:
-            class_accuracy[class_name] = (
-                class_correct[class_name] / class_total[class_name]
-            )
-
-    return global_accuracy, class_accuracy
-
-
-def train_one_epoch(
-    model: nn.Module,
-    dataloader: DataLoader,
-    criterion: nn.Module,
-    optimizer: torch.optim.Optimizer,
-    device: torch.device,
-) -> float:
-    """
-    Entraîne le modèle pendant une époque.
-    """
-    model.train()
-
-    running_loss = 0.0
-
-    for images, labels in dataloader:
-        images = images.to(device)
-        labels = labels.to(device)
-
-        optimizer.zero_grad()
-
-        #outputs = model(images)
-        #loss = criterion(outputs, labels)
-
-        outputs = model(images)
-
-        if isinstance(outputs, dict):
-            logits = outputs["logits"]
-        else:
-            logits = outputs
-
-        loss = criterion(logits, labels)
-
-        loss.backward()
-        optimizer.step()
-
-        running_loss += loss.item()
-
-    return running_loss / len(dataloader)
-
-
-def print_class_accuracy(class_accuracy: dict[str, float | None]) -> None:
-    """
-    Affiche l'accuracy par classe.
-    """
-    print("Accuracy par classe :")
-
-    for class_name, accuracy in class_accuracy.items():
-        if accuracy is None:
-            print(f"  {class_name:15s} : aucune donnée")
-        else:
-            print(f"  {class_name:15s} : {accuracy:.4f}")
 
 def class_accuracy_thresholds_are_met(
     class_accuracy: dict[str, float | None],
     thresholds: dict[str, float],
 ) -> bool:
-    """
-    Vérifie que les accuracy minimales par classe sont atteintes.
-
-    Exemple :
-        left    >= 0.92
-        forward >= 0.60
-        right   >= 0.92
-    """
     for class_name, min_accuracy in thresholds.items():
         accuracy = class_accuracy.get(class_name)
 
@@ -262,21 +284,47 @@ def class_accuracy_thresholds_are_met(
 
     return True
 
+
+def print_class_accuracy(class_accuracy: dict[str, float | None]) -> None:
+    print("Accuracy par classe :")
+
+    for class_name, accuracy in class_accuracy.items():
+        if accuracy is None:
+            print(f"  {class_name:15s} : aucune donnée")
+        else:
+            print(f"  {class_name:15s} : {accuracy:.4f}")
+
+
+def print_multitask_metrics(prefix: str, metrics: dict[str, Any]) -> None:
+    print(f"{prefix} loss totale        : {metrics['loss_total']:.4f}")
+    print(f"{prefix} loss classification: {metrics['loss_classification']:.4f}")
+    print(f"{prefix} loss régression    : {metrics['loss_regression']:.4f}")
+    print(f"{prefix} accuracy           : {metrics['classification_accuracy']:.4f}")
+    print(f"{prefix} MAE speedA         : {metrics['mae_speedA']:.2f}")
+    print(f"{prefix} MAE speedB         : {metrics['mae_speedB']:.2f}")
+    print(f"{prefix} RMSE speedA        : {metrics['rmse_speedA']:.2f}")
+    print(f"{prefix} RMSE speedB        : {metrics['rmse_speedB']:.2f}")
+
+
 def save_checkpoint(
     model: nn.Module,
     epoch: int,
-    validation_accuracy: float,
+    validation_metrics: dict[str, Any],
     path: str | Path,
 ) -> None:
-    """
-    Sauvegarde le meilleur modèle.
-    """
     checkpoint = {
         "epoch": epoch,
         "model_state_dict": model.state_dict(),
         "classes": CLASSES,
         "image_size": DEFAULT_IMAGE_SIZE,
-        "validation_accuracy": validation_accuracy,
+        "validation_accuracy": validation_metrics["classification_accuracy"],
+        "validation_loss_total": validation_metrics["loss_total"],
+        "validation_loss_classification": validation_metrics["loss_classification"],
+        "validation_loss_regression": validation_metrics["loss_regression"],
+        "validation_mae_speedA": validation_metrics["mae_speedA"],
+        "validation_mae_speedB": validation_metrics["mae_speedB"],
+        "max_abs_speed": MAX_ABS_SPEED,
+        "regression_weight": REGRESSION_WEIGHT,
     }
 
     torch.save(checkpoint, path)
@@ -287,9 +335,6 @@ def load_best_model(
     path: str | Path,
     device: torch.device,
 ) -> nn.Module:
-    """
-    Recharge le meilleur modèle sauvegardé.
-    """
     checkpoint = torch.load(path, map_location=device)
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
@@ -302,54 +347,205 @@ def load_best_model(
 
     return model
 
+
 # =============================================================================
-# Matrice de confusion pour visualisation erreurs
+# ENTRAÎNEMENT MULTI-TÂCHE
 # =============================================================================
 
-def evaluate_with_confusion_matrix(model, dataloader, device):
+def train_one_epoch_multitask(
+    model: nn.Module,
+    dataloader: DataLoader,
+    criterion: MultiTaskDrivingLoss,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+) -> dict[str, float]:
+    model.train()
+
+    running_total_loss = 0.0
+    running_cls_loss = 0.0
+    running_reg_loss = 0.0
+
+    total = 0
+    correct = 0
+
+    for images, action_labels, motor_targets in dataloader:
+        images = images.to(device)
+        action_labels = action_labels.to(device).long()
+        motor_targets = motor_targets.to(device).float()
+
+        optimizer.zero_grad()
+
+        outputs = model(images)
+
+        loss, loss_metrics = criterion(
+            outputs=outputs,
+            action_labels=action_labels,
+            motor_targets=motor_targets,
+        )
+
+        loss.backward()
+        optimizer.step()
+
+        logits = outputs["logits"]
+        predictions = torch.argmax(logits, dim=1)
+
+        total += action_labels.size(0)
+        correct += (predictions == action_labels).sum().item()
+
+        running_total_loss += loss_metrics["loss_total"]
+        running_cls_loss += loss_metrics["loss_classification"]
+        running_reg_loss += loss_metrics["loss_regression"]
+
+    n_batches = len(dataloader)
+
+    return {
+        "loss_total": running_total_loss / n_batches,
+        "loss_classification": running_cls_loss / n_batches,
+        "loss_regression": running_reg_loss / n_batches,
+        "classification_accuracy": correct / total if total > 0 else 0.0,
+    }
+
+
+# =============================================================================
+# ÉVALUATION MULTI-TÂCHE
+# =============================================================================
+
+def evaluate_multitask(
+    model: nn.Module,
+    dataloader: DataLoader,
+    criterion: MultiTaskDrivingLoss,
+    device: torch.device,
+) -> dict[str, Any]:
     model.eval()
+
+    running_total_loss = 0.0
+    running_cls_loss = 0.0
+    running_reg_loss = 0.0
+
+    total = 0
+    correct = 0
+
+    class_total = {class_name: 0 for class_name in CLASSES}
+    class_correct = {class_name: 0 for class_name in CLASSES}
 
     all_labels = []
     all_predictions = []
 
-    with torch.no_grad():
-        for images, labels in dataloader:
-            images = images.to(device)
-            labels = labels.to(device).long()
+    all_motor_targets = []
+    all_motor_predictions = []
 
-            #outputs = model(images)
-            #predictions = torch.argmax(outputs, dim=1)
+    with torch.no_grad():
+        for images, action_labels, motor_targets in dataloader:
+            images = images.to(device)
+            action_labels = action_labels.to(device).long()
+            motor_targets = motor_targets.to(device).float()
 
             outputs = model(images)
 
-            if isinstance(outputs, dict):
-                logits = outputs["logits"]
-            else:
-                logits = outputs
+            loss, loss_metrics = criterion(
+                outputs=outputs,
+                action_labels=action_labels,
+                motor_targets=motor_targets,
+            )
+
+            logits = outputs["logits"]
+            motor_predictions = outputs["motor_commands"]
 
             predictions = torch.argmax(logits, dim=1)
 
-            all_labels.extend(labels.cpu().numpy())
+            total += action_labels.size(0)
+            correct += (predictions == action_labels).sum().item()
+
+            running_total_loss += loss_metrics["loss_total"]
+            running_cls_loss += loss_metrics["loss_classification"]
+            running_reg_loss += loss_metrics["loss_regression"]
+
+            all_labels.extend(action_labels.cpu().numpy())
             all_predictions.extend(predictions.cpu().numpy())
+
+            all_motor_targets.append(motor_targets.cpu())
+            all_motor_predictions.append(motor_predictions.cpu())
+
+            for prediction, label in zip(predictions, action_labels):
+                label_idx = int(label.item())
+                pred_idx = int(prediction.item())
+
+                label_name = IDX_TO_CLASS[label_idx]
+
+                class_total[label_name] += 1
+
+                if pred_idx == label_idx:
+                    class_correct[label_name] += 1
+
+    n_batches = len(dataloader)
+
+    motor_targets_np = torch.cat(all_motor_targets, dim=0).numpy()
+    motor_predictions_np = torch.cat(all_motor_predictions, dim=0).numpy()
+
+    motor_errors = motor_predictions_np - motor_targets_np
+
+    mae_per_motor = np.mean(np.abs(motor_errors), axis=0)
+    rmse_per_motor = np.sqrt(np.mean(motor_errors ** 2, axis=0))
+
+    class_accuracy: dict[str, float | None] = {}
+
+    for class_name in CLASSES:
+        if class_total[class_name] == 0:
+            class_accuracy[class_name] = None
+        else:
+            class_accuracy[class_name] = (
+                class_correct[class_name] / class_total[class_name]
+            )
 
     cm = confusion_matrix(
         all_labels,
         all_predictions,
-        labels=list(range(len(CLASSES)))
+        labels=list(range(len(CLASSES))),
     )
+
+    report = classification_report(
+        all_labels,
+        all_predictions,
+        target_names=CLASSES,
+        digits=4,
+    )
+
+    return {
+        "loss_total": running_total_loss / n_batches,
+        "loss_classification": running_cls_loss / n_batches,
+        "loss_regression": running_reg_loss / n_batches,
+        "classification_accuracy": correct / total if total > 0 else 0.0,
+        "class_accuracy": class_accuracy,
+        "confusion_matrix": cm,
+        "classification_report": report,
+        "mae_speedA": float(mae_per_motor[0]),
+        "mae_speedB": float(mae_per_motor[1]),
+        "rmse_speedA": float(rmse_per_motor[0]),
+        "rmse_speedB": float(rmse_per_motor[1]),
+        "mae_global": float(np.mean(np.abs(motor_errors))),
+        "rmse_global": float(np.sqrt(np.mean(motor_errors ** 2))),
+    }
+
+
+def print_final_evaluation(metrics: dict[str, Any]) -> None:
+    print(f"Test accuracy : {metrics['classification_accuracy']:.4f}")
+
+    print_class_accuracy(metrics["class_accuracy"])
 
     print("\nMatrice de confusion :")
-    print(cm)
+    print(metrics["confusion_matrix"])
 
     print("\nRapport de classification :")
-    print(
-        classification_report(
-            all_labels,
-            all_predictions,
-            target_names=CLASSES,
-            digits=4
-        )
-    )
+    print(metrics["classification_report"])
+
+    print("\nÉvaluation des commandes moteur :")
+    print(f"  MAE speedA       : {metrics['mae_speedA']:.2f}")
+    print(f"  MAE speedB       : {metrics['mae_speedB']:.2f}")
+    print(f"  RMSE speedA      : {metrics['rmse_speedA']:.2f}")
+    print(f"  RMSE speedB      : {metrics['rmse_speedB']:.2f}")
+    print(f"  MAE globale      : {metrics['mae_global']:.2f}")
+    print(f"  RMSE globale     : {metrics['rmse_global']:.2f}")
+
 
 # =============================================================================
 # PROGRAMME PRINCIPAL
@@ -363,30 +559,27 @@ def main() -> None:
 
     model_path = Path(MULTITASK_MODEL_PATH)
 
-
     check_dataset_paths()
-
-    #train_transform = create_train_transform()
-    #eval_transform = create_eval_transform()
 
     tensor_transform = transforms.Compose([
         transforms.ToTensor(),
     ])
-    train_dataset = AutonomousCardataset(
-        csv_file=str(TRAIN_CSV),
-        image_dir=str(TRAIN_IMAGE_DIR),
+
+    train_dataset = MultiTaskAutonomousCarDataset(
+        csv_file=TRAIN_CSV,
+        image_dir=TRAIN_IMAGE_DIR,
         transform=tensor_transform,
     )
 
-    valid_dataset = AutonomousCardataset(
-        csv_file=str(VALID_CSV),
-        image_dir=str(VALID_IMAGE_DIR),
+    valid_dataset = MultiTaskAutonomousCarDataset(
+        csv_file=VALID_CSV,
+        image_dir=VALID_IMAGE_DIR,
         transform=tensor_transform,
     )
 
-    test_dataset = AutonomousCardataset(
-        csv_file=str(TEST_CSV),
-        image_dir=str(TEST_IMAGE_DIR),
+    test_dataset = MultiTaskAutonomousCarDataset(
+        csv_file=TEST_CSV,
+        image_dir=TEST_IMAGE_DIR,
         transform=tensor_transform,
     )
 
@@ -418,7 +611,11 @@ def main() -> None:
 
     model = create_model(device)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = MultiTaskDrivingLoss(
+        regression_weight=REGRESSION_WEIGHT,
+        max_abs_speed=MAX_ABS_SPEED,
+    )
+
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=LEARNING_RATE,
@@ -428,7 +625,7 @@ def main() -> None:
     model_was_saved = False
 
     for epoch in range(EPOCHS):
-        train_loss = train_one_epoch(
+        train_metrics = train_one_epoch_multitask(
             model=model,
             dataloader=train_loader,
             criterion=criterion,
@@ -436,16 +633,21 @@ def main() -> None:
             device=device,
         )
 
-        validation_accuracy, validation_class_accuracy = compute_accuracy(
+        validation_metrics = evaluate_multitask(
             model=model,
             dataloader=valid_loader,
+            criterion=criterion,
             device=device,
         )
 
+        validation_accuracy = validation_metrics["classification_accuracy"]
+        validation_class_accuracy = validation_metrics["class_accuracy"]
+
         print("\n" + "=" * 70)
         print(f"Epoch [{epoch + 1}/{EPOCHS}]")
-        print(f"Train loss          : {train_loss:.4f}")
-        print(f"Validation accuracy : {validation_accuracy:.4f}")
+
+        print_multitask_metrics("Train", train_metrics)
+        print_multitask_metrics("Valid", validation_metrics)
 
         print_class_accuracy(validation_class_accuracy)
 
@@ -462,16 +664,18 @@ def main() -> None:
                 save_checkpoint(
                     model=model,
                     epoch=epoch + 1,
-                    validation_accuracy=validation_accuracy,
-                    path=MULTITASK_MODEL_PATH,
+                    validation_metrics=validation_metrics,
+                    path=model_path,
                 )
 
                 print(
-                    f"Modèle sauvegardé : {MULTITASK_MODEL_PATH} "
+                    f"Modèle sauvegardé : {model_path} "
                     f"| val_acc={validation_accuracy:.4f} "
                     f"| left={validation_class_accuracy['left']:.4f} "
                     f"| forward={validation_class_accuracy['forward']:.4f} "
-                    f"| right={validation_class_accuracy['right']:.4f}"
+                    f"| right={validation_class_accuracy['right']:.4f} "
+                    f"| MAE_A={validation_metrics['mae_speedA']:.2f} "
+                    f"| MAE_B={validation_metrics['mae_speedB']:.2f}"
                 )
             else:
                 print(
@@ -502,24 +706,19 @@ def main() -> None:
 
     model = load_best_model(
         model=model,
-        path=MULTITASK_MODEL_PATH,
+        path=model_path,
         device=device,
     )
 
-    test_accuracy, test_class_accuracy = compute_accuracy(
+    test_metrics = evaluate_multitask(
         model=model,
         dataloader=test_loader,
+        criterion=criterion,
         device=device,
     )
 
-    print(f"Test accuracy : {test_accuracy:.4f}")
-    print_class_accuracy(test_class_accuracy)
-    
-    evaluate_with_confusion_matrix(
-    model=model,
-    dataloader=test_loader,
-    device=device
-    )
+    print_final_evaluation(test_metrics)
+
 
 if __name__ == "__main__":
     main()
