@@ -13,15 +13,8 @@ SAMPLE_PERIOD_MS = 250
 # Raw direction labels found in CSV exports.
 CLASSES = [
     "forward",
-    "light_left",
-    "light_right",
-    "pivot_left",
-    "pivot_right",
-    "sharp_left",
-    "sharp_right",
-    "backward",
-    "stop",
-    "other",
+    "left",
+    "right",
 ]
 
 # Training/inference uses a simplified 3-class decision space.

@@ -40,7 +40,9 @@ def predict_image(image_path: str | Path, model_path: str = DEFAULT_MODEL_PATH) 
 
     with torch.no_grad():
         outputs = model(tensor)
-        probabilities = torch.softmax(outputs, dim=1)
+        logits = outputs["logits"] if isinstance(outputs, dict) else outputs
+        probabilities = torch.softmax(logits, dim=1)
+        predicted_index = torch.argmax(probabilities, dim=1).item()
         predicted_index = torch.argmax(probabilities, dim=1).item()
 
     predicted_action = IDX_TO_CLASS[predicted_index]

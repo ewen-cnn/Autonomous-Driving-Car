@@ -26,10 +26,10 @@ class DrivingFeatureExtractor(nn.Module):
 
         self.features = nn.Sequential(
             # Bloc 1
-            nn.Conv2d(in_channels, 32, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(in_channels, 32, kernel_size=3, stride=1, padding=1), # Cherche des motifs locaux dans l’image
+            nn.BatchNorm2d(32),                                             # Stabilise l’apprentissage. Elle normalise les activations internes du réseau
+            nn.ReLU(inplace=True),                                          # Ajoute de la non-linéarité
+            nn.MaxPool2d(kernel_size=2),                                    # Réduit la taille spatiale de l’image
 
             # Bloc 2
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
@@ -73,15 +73,8 @@ class DrivingClassifierCNN(nn.Module):
 
     Exemple de classes :
         forward
-        light_left
-        light_right
-        pivot_left
-        pivot_right
-        sharp_left
-        sharp_right
-        backward
-        stop
-        other
+        left
+        right
 
     Sortie :
         logits de taille (batch_size, num_classes)
@@ -142,7 +135,7 @@ class DrivingRegressorCNN(nn.Module):
     def __init__(self, output_dim: int = 2, max_abs_speed: float = 100.0):
         super().__init__()
 
-        self.encoder = DrivingFeatureExtractor(in_channels=3)
+        self.encoder = DrivingFeatureExtractor(in_channels=3)   
         self.max_abs_speed = float(max_abs_speed)
 
         self.regressor = nn.Sequential(

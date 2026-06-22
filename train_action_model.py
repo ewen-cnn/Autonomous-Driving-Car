@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from sklearn.metrics import confusion_matrix, classification_report
+from torchvision import transforms
 
 from actions import CLASSES, IDX_TO_CLASS
 from config import DEFAULT_IMAGE_SIZE, MULTITASK_MODEL_PATH, BALANCED_dataset_DIR
@@ -362,31 +363,31 @@ def main() -> None:
 
     model_path = Path(MULTITASK_MODEL_PATH)
 
-    if model_path.exists():
-        model_path.unlink()
-        print(f"Ancien modèle supprimé : {model_path}")
 
     check_dataset_paths()
 
-    train_transform = create_train_transform()
-    eval_transform = create_eval_transform()
+    #train_transform = create_train_transform()
+    #eval_transform = create_eval_transform()
 
+    tensor_transform = transforms.Compose([
+        transforms.ToTensor(),
+    ])
     train_dataset = AutonomousCardataset(
         csv_file=str(TRAIN_CSV),
         image_dir=str(TRAIN_IMAGE_DIR),
-        transform=train_transform,
+        transform=tensor_transform,
     )
 
     valid_dataset = AutonomousCardataset(
         csv_file=str(VALID_CSV),
         image_dir=str(VALID_IMAGE_DIR),
-        transform=eval_transform,
+        transform=tensor_transform,
     )
 
     test_dataset = AutonomousCardataset(
         csv_file=str(TEST_CSV),
         image_dir=str(TEST_IMAGE_DIR),
-        transform=eval_transform,
+        transform=tensor_transform,
     )
 
     train_loader = DataLoader(
