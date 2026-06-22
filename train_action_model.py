@@ -300,10 +300,12 @@ def print_multitask_metrics(prefix: str, metrics: dict[str, Any]) -> None:
     print(f"{prefix} loss classification: {metrics['loss_classification']:.4f}")
     print(f"{prefix} loss régression    : {metrics['loss_regression']:.4f}")
     print(f"{prefix} accuracy           : {metrics['classification_accuracy']:.4f}")
-    print(f"{prefix} MAE speedA         : {metrics['mae_speedA']:.2f}")
-    print(f"{prefix} MAE speedB         : {metrics['mae_speedB']:.2f}")
-    print(f"{prefix} RMSE speedA        : {metrics['rmse_speedA']:.2f}")
-    print(f"{prefix} RMSE speedB        : {metrics['rmse_speedB']:.2f}")
+
+    if "mae_speedA" in metrics:
+        print(f"{prefix} MAE speedA         : {metrics['mae_speedA']:.2f}")
+        print(f"{prefix} MAE speedB         : {metrics['mae_speedB']:.2f}")
+        print(f"{prefix} RMSE speedA        : {metrics['rmse_speedA']:.2f}")
+        print(f"{prefix} RMSE speedB        : {metrics['rmse_speedB']:.2f}")
 
 
 def save_checkpoint(
