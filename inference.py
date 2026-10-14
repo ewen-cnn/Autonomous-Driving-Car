@@ -43,7 +43,6 @@ def predict_image(image_path: str | Path, model_path: str = DEFAULT_MODEL_PATH) 
         logits = outputs["logits"] if isinstance(outputs, dict) else outputs
         probabilities = torch.softmax(logits, dim=1)
         predicted_index = torch.argmax(probabilities, dim=1).item()
-        predicted_index = torch.argmax(probabilities, dim=1).item()
 
     predicted_action = IDX_TO_CLASS[predicted_index]
     confidence = probabilities[0, predicted_index].item()
