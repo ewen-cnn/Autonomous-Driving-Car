@@ -10,11 +10,11 @@ import torch.nn as nn
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from sklearn.metrics import confusion_matrix, classification_report
-from torchvision import transforms
 
 from actions import CLASSES, IDX_TO_CLASS
 from config import DEFAULT_IMAGE_SIZE, MULTITASK_MODEL_PATH
 from model import DrivingCNN
+from Traitement.transforms import build_eval_transform
 
 
 # =============================================================================
@@ -563,9 +563,9 @@ def main() -> None:
 
     check_dataset_paths()
 
-    tensor_transform = transforms.Compose([
-        transforms.ToTensor(),
-    ])
+    # Same preprocessing as inference.py (resize + ImageNet normalisation),
+    # so a checkpoint behaves identically at training and deployment time.
+    tensor_transform = build_eval_transform(DEFAULT_IMAGE_SIZE)
 
     train_dataset = MultiTaskAutonomousCarDataset(
         csv_file=TRAIN_CSV,
