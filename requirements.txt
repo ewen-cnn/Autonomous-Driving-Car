@@ -1,5 +1,7 @@
+numpy
 pandas
 Pillow
 pytest
+scikit-learn
 torch
 torchvision
